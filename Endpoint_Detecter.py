@@ -99,8 +99,8 @@ def Endpoint_Detecter(filename, sr=22050, frame_length=441, hop_length=220, chec
     end_list=[]
     end_interval=0
     while end_interval < len(frames):
-        start_interval = find_start_interval(energy, end_interval, IAV_thresh, check)
-        end_interval=find_end_interval(energy, start_interval, IAV_thresh, check)
+        start_interval = find_start_energy(energy, end_interval, IAV_thresh, check)
+        end_interval=find_end_energy(energy, start_interval, IAV_thresh, check)
         if start_interval==0 or end_interval==0:
             break
         start_i = find_start_sample_ind(frames, start_interval, IAV_thresh, hop_length)
