@@ -184,7 +184,32 @@ def remove_empty_from_csv(filename, encoding='cp949'):
             writer.writerow(conv)
 
 
-def createDictFromSentences(sentences):
+def createSparseDictFromSentences(sentences, isDecInput=False):
+    '''    
+    :param sentences: datas from which it create dict 
+    :param isDecInput: if isDecInput is False, returns dict for encoder else, returns dict for decoder input 
+    :return: dicts for encoder and decoder respectively
+    '''
+    temp=[] # 중복을 나중에 없앨 딕셔너리 단어들.
+
+    for sent in sentences:
+        temp.extend(sent)
+    temp = list(set(temp))
+    if isDecInput is True:
+        temp.insert(0,"<PAD>")
+        temp.insert(1,"<START>")
+        # temp.append("<EOS>")
+    else :
+        temp.insert(0,"<PAD>")
+        temp.insert(1,"<UNK>")
+
+
+    dict_key2val = {c:i for i, c in enumerate(temp)} #중복 없애는 방법이 바람직하지 않다. 그러나 아무것도 안들어갈건 아니잖아.
+    dict_val2key = {i:c for i, c in enumerate(temp)}
+
+    return (dict_key2val, dict_val2key)
+
+def createOneHotDictFromSentences(sentences):
     '''    
     :param sentences: the datas to be embedded
     :return: zero padded dict
@@ -248,11 +273,17 @@ def get_emotion_score(sentence):
 # FQ, FA 잘린거로부터 가져와서 train, test 나눠서 반환할 메소드(근데 이건 load_data()에서 받아서 해도 된다.
 # 한편 부경대 팀이 Sentence Generator를 만들려면 FA에 대한 OA도 필요하다.X FS에 대한 OS가 있으면 된다. For Grammar Generator
 # 가장 중요한 것은 전달할 파라미터를 맞추는 것이다, Set이다. (V차원의 단어벡터(FQ), 각 단어의 감정 스코어, 각 단어의 4차원 스코어, FA, FS, OS) 4개는 Bot Engine, 2개는 Grammar Generator
-def load_handwork_n_create_dict(filename, dictfile_forBE, dictfile_forGG, save=0):
+def load_handwork_n_create_dict(filename, Encoder_Dict_key2val_file_forBE, Decoder_Dict_key2val_file_forBE, Decoder_Dict_val2key_file_forBE, Encoder_Dict_key2val_file_forGG, Decoder_Dict_key2val_file_forGG, Decoder_Dict_val2key_file_forGG, save=0):
     '''    
-    :param filename: csv file on handwork
-    :param save: to train generative models it need to get a embedded data and it should have a integrities(validation, keeping consistancy) for these save dict, to contain these works save parameter is designed       
-    :return tokens of sentences for BE, GG to be mapping into |V|
+    :param filename: csv file on handwork to be load
+    :param Encoder_Dict_key2val_file_forBE : dict file needed to convert input seq for encoder into integer indices for BE
+    :param Decoder_Dict_key2val_file_forBE : dict file needed to convert input seq for decoder into integer indices for BE
+    :param Decoder_Dict_val2key_file_forBE : dict fle needed to convert integer indices into sentences for BE
+    :param Encoder_Dict_key2val_file_forGG : for GG
+    :param Decoder_Dict_key2val_file_forGG : for GG
+    :param Decoder_Dict_val2key_file_forGG : for GG
+    :param save: to train generative models, need to get a embedded data and it should have a integrities(validation, keeping consistancy) for these save dict, to contain these works save parameter is designed       
+    :return tokens of sentences for BE, GG to be mapping into lists of integer 
     '''
     # 수작업 전처리된 CSV 로딩
     original_query = []
@@ -268,19 +299,32 @@ def load_handwork_n_create_dict(filename, dictfile_forBE, dictfile_forGG, save=0
     (fa_input, oa_output) = disintegrator(original_answer)
 
     # Grammar Generator를 위한 input, output 데이터
-    inputdata_forGG = fq_input + fa_input#list of sentences, each sentence is tokenized
+    inputdata_forGG = fq_input + fa_input #list of sentences, each sentence is tokenized
     outputdata_forGG = oq_output + oa_output
 
     if save==1:
         #각 단어를 임베딩해서 저장해야함.
-        Dict_forBE = createDictFromSentences(inputdata_forGG)
-        with open(dictfile_forBE, 'w') as f:
-            json.dump(Dict_forBE, f)
+        #Dict_forBE = createOneHotDictFromSentences(inputdata_forGG)
+        Encoder_Dict_key2val_forBE, _ = createSparseDictFromSentences(fq_input)
+        (Decoder_Dict_key2val_forBE, Decoder_Dict_val2key_forBE) = createSparseDictFromSentences(fa_input, isDecInput=True)
+        with open(Encoder_Dict_key2val_file_forBE, 'w') as f:
+            json.dump(Encoder_Dict_key2val_forBE, f)
+        with open(Decoder_Dict_key2val_file_forBE, 'w') as f:
+            json.dump(Decoder_Dict_key2val_forBE, f)
+        with open(Decoder_Dict_val2key_file_forBE, 'w') as f:
+            json.dump(Decoder_Dict_val2key_forBE, f)
+        print("Dict for BE stored")
 
-        Dict_forGG = createDictFromSentences(inputdata_forGG+outputdata_forGG)
-        with open(dictfile_forGG, 'w') as f:
-            json.dump(Dict_forGG, f)
-
+        #Dict_forGG = createOneHotDictFromSentences(inputdata_forGG+outputdata_forGG)
+        Encoder_Dict_key2val_forGG, _ = createSparseDictFromSentences(inputdata_forGG)
+        (Decoder_Dict_key2val_forGG, Decoder_Dict_val2key_forGG) = createSparseDictFromSentences(outputdata_forGG, isDecInput=True)
+        with open(Encoder_Dict_key2val_file_forGG, 'w') as f:
+            json.dump(Encoder_Dict_key2val_forGG, f)
+        with open(Decoder_Dict_key2val_file_forGG, 'w') as f:
+            json.dump(Decoder_Dict_key2val_forGG, f)
+        with open(Decoder_Dict_val2key_file_forGG, 'w') as f:
+            json.dump(Decoder_Dict_val2key_forGG, f)
+        print("Dict for GG stored")
     return (fq_input, fa_input, inputdata_forGG, outputdata_forGG)
 
 def beEmbedded(sentences, dict, unk_symbol="<UNK>"):
@@ -296,6 +340,7 @@ def beEmbedded(sentences, dict, unk_symbol="<UNK>"):
             try:
                 embeddedsent.append(dict[token])
             except KeyError as ke:
+                print(ke)
                 embeddedsent.append(dict[unk_symbol])
         result.append(embeddedsent)
     return result
@@ -307,61 +352,81 @@ def bePadding(sentences, max_pad_len, pad_symbol='<PAD>'):
             sent.append(pad_symbol)
     return sentences
 
-def beTagging(sentences, start_symbol='<START>', end_symbol='<EOS>'):
+def beTagging(sentences, start_symbol='<START>'):
     '''    
     :param sentences: treated sentences
-    :param start_symbol: symbol to be adapted
-    :param end_symbol: symbol to be adapted
-    :return: tagged input for decoder, tagged output for target 
+    :param start_symbol: symbol to be adapted    
+    :return: tagged input for decoder 
     '''
     dec_input = []
-    dec_output = []
     for sent in sentences:
         temp = sent.copy()
         temp.insert(0, start_symbol)
         dec_input.append(temp)
-        sent.append(end_symbol)
-        dec_output.append(sent)
-    return (dec_input, dec_output)
+
+    return dec_input
 
 # 최종적으로 load_data는 적절한 질의응답(최종 입출력)이 결정되고, 이들로부터 임베딩된 단어들을 반환해줘야한다. 그리고 감정 스코어도 저장된 파일로부터 산출해서 반환한다.
-def load_data(QAfile, BEdictfile, GGdictfile):
-    FQ, FA, inputdata_forGG, outputdata_forGG = load_handwork_n_create_dict(QAfile, BEdictfile, GGdictfile)
+def load_data(QAfile, Encoder_Dict_key2val_file_forBE, Decoder_Dict_key2val_file_forBE, Decoder_Dict_val2key_file_forBE, Encoder_Dict_key2val_file_forGG, Decoder_Dict_key2val_file_forGG, Decoder_Dict_val2key_file_forGG):
+    '''    
+    :param QAfile: handworks for real sentences 
+    :param Encoder_Dict_key2val_file_forBE: Encoder Dict for BE
+    :param Decoder_Dict_key2val_file_forBE: Decoder Dict for BE
+    :param Decoder_Dict_val2key_file_forBE: Encoder Dict for GG
+    :param Encoder_Dict_key2val_file_forGG: Decoder Dict for GG
+    :param Decoder_Dict_key2val_file_forGG
+    :param Decoder_Dict_val2key_file_forGG
+    :return: 
+    (enc inputs for be,                     # 
+    dec inputs for be,                      #
+    enc dicts for BE test,                  #
+    dec dicts for BE's last Decoder works,  #
+    enc inputs for gg,                      #
+    dec inputs for gg,                      #
+    enc dicts for GG test,                  #
+    dec dicts for GG's last Decoder works)  #
+    '''
+    FQ, FA, inputdata_forGG, outputdata_forGG = load_handwork_n_create_dict(QAfile, Encoder_Dict_key2val_file_forBE, Decoder_Dict_key2val_file_forBE, Decoder_Dict_val2key_file_forBE, Encoder_Dict_key2val_file_forGG, Decoder_Dict_key2val_file_forGG, Decoder_Dict_val2key_file_forGG)
 
+    #입출력 데이터 패딩 및 태깅
     FQ_enc_input = bePadding(FQ, 40)
-    (FA_dec_input, FA_dec_output) = beTagging(FA)
+    FA_dec_input = bePadding(FA, 40)
+    FA_dec_input = beTagging(FA_dec_input)
 
     enc_input_forGG = bePadding(inputdata_forGG, 40)
-    (outputdata_forGG_dec_input, outputdata_forGG_dec_output) = beTagging(outputdata_forGG)
+    dec_input_forGG = bePadding(outputdata_forGG, 40)
+    dec_input_forGG = beTagging(dec_input_forGG)
 
-    with open(BEdictfile) as f:
-        BEDict = json.load(f)
-        embedded_FQ_enc_input = beEmbedded(FQ_enc_input, BEDict)
-        embedded_FA_dec_input = beEmbedded(FA_dec_input, BEDict)
-        embedded_FA_dec_output = beEmbedded(FA_dec_output, BEDict)
+    with open(Encoder_Dict_key2val_file_forBE) as f:
+        Encoder_Dict_key2val_forBE = json.load(f)
+        #print(Encoder_Dict_key2val_forBE)
+        embedded_enc_input_forBE = beEmbedded(FQ_enc_input, Encoder_Dict_key2val_forBE)
+    with open(Decoder_Dict_key2val_file_forBE) as f:
+        Decoder_Dict_key2val_forBE = json.load(f)
+        embedded_dec_input_forBE = beEmbedded(FA_dec_input, Decoder_Dict_key2val_forBE)
+    with open(Decoder_Dict_val2key_file_forBE) as f:
+        Decoder_Dict_val2key_forBE = json.load(f)
 
-
-    with open(GGdictfile) as f:
-        GGDict = json.load(f)
-
-        embedded_enc_input_forGG = beEmbedded(enc_input_forGG, GGDict)
-        embedded_dec_output_forGG = beEmbedded(outputdata_forGG_dec_input, GGDict)
-        embedded_dec_output_forGG = beEmbedded(outputdata_forGG_dec_output, GGDict)
+    with open(Encoder_Dict_key2val_file_forGG) as f:
+        Encoder_Dict_key2val_forGG = json.load(f)
+        embedded_enc_input_forGG = beEmbedded(enc_input_forGG, Encoder_Dict_key2val_forGG)
+    with open(Decoder_Dict_key2val_file_forGG) as f:
+        Decoder_Dict_key2val_forGG = json.load(f)
+        embedded_dec_input_forGG = beEmbedded(dec_input_forGG, Decoder_Dict_key2val_forGG)
+    with open(Decoder_Dict_val2key_file_forGG) as f:
+        Decoder_Dict_val2key_forGG = json.load(f)
 
     # 각 단어에 대한 감정 산출 ** 이 부분이 이야기 되어야한다. 각 단어별 감정 스코어 갈지, 문장의 감정 스코어 갈지. 그리고 4차원 감정 스코어는 각 단어에 대해서 넣을지.(대표값 선택은 최대값을 선택해야할 것 임.)
     # 감정 스코어는 FQ 문장에 대한 감정 스코어를 가져와야한다.
     # get_emotion_score(sentence)가 문장에 대한 스코어를 주면 될 듯 하다.
 
-    return (embedded_FQ_enc_input, embedded_FA_dec_input,embedded_FA_dec_output, embedded_enc_input_forGG, embedded_dec_output_forGG,embedded_dec_output_forGG)
+    return (embedded_enc_input_forBE, embedded_dec_input_forBE, Encoder_Dict_key2val_forBE , Decoder_Dict_val2key_forBE, embedded_enc_input_forGG, embedded_dec_input_forGG,Encoder_Dict_key2val_forGG, Decoder_Dict_val2key_forGG)
 
 #subtitle_converter("data_staryou.txt", "data_staryou.csv")
 #remove_empty_from_csv("data_staryou.csv")
-#load_handwork_n_create_dict("data_staryou.csv", "dict_for_be.txt","dict_for_gg.txt",save=1)
+#load_handwork_n_create_dict("data_staryou.csv", "Encoder_Dict_key2val_file_forBE", "Decoder_Dict_key2val_file_forBE", "Decoder_Dict_val2key_file_forBE", "Encoder_Dict_key2val_file_forGG", "Decoder_Dict_key2val_file_forGG", "Decoder_Dict_val2key_file_forGG", save=1)
 
-#(embedded_FQ, embedded_FA, embedded_input_forGG, embedded_output_forGG) = load_data("data_staryou.csv", "dict_for_be.txt","dict_for_gg.txt")
-load_data("data_staryou.csv", "dict_for_be.txt","dict_for_gg.txt")
-#print(len(embedded_FQ))
-#print(embedded_FQ)
+f1,f2,f3,f4,f5,f6, f7, f8 = load_data("data_staryou.csv", "Encoder_Dict_key2val_file_forBE", "Decoder_Dict_key2val_file_forBE", "Decoder_Dict_val2key_file_forBE", "Encoder_Dict_key2val_file_forGG", "Decoder_Dict_key2val_file_forGG", "Decoder_Dict_val2key_file_forGG")
 
 '''
 필요한 라이브러리
@@ -371,8 +436,9 @@ Numpy, koNLPy
 2. subtitle_converter로 그걸 가져와서 어느정도는 프로그램으로 전처리한다. 이후 csv로 저장(타임라인 제거, 태그제거, 영어 노래 제거, ?가 연속일때 포함해서 쿼리로 처리, 그 다음 문장을 응답으로 처리, 특수한 고유명사에 대해서 대체어로 대체, 너무 긴 질의응답 제거)     
 3. 수작업으로 나머지 전처리한다.(어색한 질의응답 제거, 파악하지 못한 특수 인명 사용 여부)
 3-1. remove_empty_from_csv()으로 후처리 한다.
-4. load_n_embedding으로 위 3번 작업후 csv파일 로딩하고 Bot Engine과 Grammar Engine에 필요한 데이터로 각각 나누고 적당히 자른다음 태그를 붙여서 원핫으로 임베딩한다. 그리고 딕셔너리를 저장한다.
-load_n_embedding(,save=1)
+4. 위 3번 작업후 load_handwork_n_create_dict() 으로 csv파일 로딩하고 Bot Engine과 Grammar Engine에 필요한 데이터로 각각 나누고 적당히 자른다음 태그를 붙여서 임베딩한다. 
+그리고 딕셔너리를 저장한다. 이 때 저장하는 딕셔너리가 총 6가지이다.
+load_n_embedding(...,save=1)
 5. load_data로 딕셔너리만 가져온다. 딕셔너리는 Bot Engine과 Grammar Engine을 위한 각각의 train, test용 데이터를 적용직전 상태로 저장되어있다.
 
 Bot Engine 개발 팀은 해당 파일을 임포트하고 딕셔너리 파일 받아서 load_data()만 호출하면된다.
