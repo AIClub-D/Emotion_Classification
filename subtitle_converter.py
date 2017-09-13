@@ -34,48 +34,15 @@ def extract_conversations_v2(datas, num_nextA=2):
         pattern="([?]+)"
         p = re.compile(pattern)
         m = p.search(datas[idx])
+        temp=""
         if m :
             OQ.append(datas[idx])
             if num_nextA+1 + idx < len(datas):
                 temp = " ".join([datas[i] for i in range(idx+1, idx + num_nextA+1)]) # 그 다음 대답이 질문자일 수 있음. 상대 대답이 2 문장 일 수있음.
                 OA.append(temp)
             else :
-                temp = " ".join(
-                    [datas[i] for i in range(idx,len(datas))])  # 그 다음 대답이 질문자일 수 있음. 상대 대답이 2 문장 일 수있음.
+                temp = " ".join([datas[i] for i in range(idx+1,len(datas))])  # 그 다음 대답이 질문자일 수 있음. 상대 대답이 2 문장 일 수있음.
                 OA.append(temp)
-    return (OQ, OA)
-
-#1. 질문 응답 셋을 만들어야한다. ? 나오면 질문, 그 다음 . or ! 나올때까지 받아놓고 응답으로 본다. (이후는 수작업가자.)
-def extract_conversations(datas):
-    OQ=[]
-    OA=[]
-
-    last_query = ""
-    answer = ""
-    for line in datas:
-        #answer이 비었을때만 last_query 넣는다. ? 랑 !가 연속이면 저장해봄. 문제점1. !가 저장되버림 문제점2. 서로 물음표 쓰면서 대화하고 있을 때. 문제점3. 서로 마침표 쓰면서 대화할 때.
-        #?를 포함하면 바로 선택, 바로 그 다음 응답만 선택
-        pattern = "([?]+)"
-        p = re.compile(pattern)
-        m = p.search(line)
-        if m and len(answer) == 0:
-            if len(last_query) == 0:
-                last_query = line
-            else:
-                last_query += " " + line
-        elif len(last_query) != 0 and len(answer) != 0 and m:
-            OQ.append(last_query)
-            OA.append(answer)
-            last_query = line
-            answer = ""
-        else:
-            if len(last_query) != 0 and m is None and len(answer) == 0:
-                answer = line
-            elif len(last_query) != 0 and m is None and len(answer) != 0:
-                answer += " " + line
-    if len(last_query) != 0 and len(answer) != 0 :
-        OQ.append(last_query)
-        OA.append(answer)
     return (OQ, OA)
 
 #2. 같은 사람이 이어서 말한건데 자막이 줄을 바꿨으면?  모든 라인을 돌면서, 마침표('.')가 없이 마치면 잘린걸로 보고 다음 line을 그 앞 line에 붙인다.
@@ -103,18 +70,39 @@ def attach_sameturn(data):
                 temp += line
     return result
 
-#3. 너무 긴 질문이나 응답은 세트로 날리기
-def QA_cutter(query, answer):
+def QA_cutter_v2(query, answer):
+    remove_idx_list=[]
+    for oq, oa, in zip(query, answer):
+        if len(oq) > 40 or len(oa) > 40:  # 짧은거에 대해서는 질문만 고려
+            remove_idx_list.append(1)
+            # for q, a in zip(remove_query_list, remove_answer_list):
+            # print(len(q), "VSVSVS", len(a))
+            # print(q, "VSVSVS", a)
+        else :
+            remove_idx_list.append(0)
+
+    for idx, val in enumerate(remove_idx_list):
+        if 1==val:
+            query[idx] = ""
+            answer[idx] = ""
+
+    return (query, answer)
+
     remove_query_list = []
     remove_answer_list = []
     for oq, oa, in zip(query, answer):
-        if len(oq) > 40 or len(oa) > 40 or len(oq) < 5: # 짧은거에 대해서는 질문만 고려
+        if len(oq) > 40 or len(oa) > 40 : # 짧은거에 대해서는 질문만 고려
             remove_query_list.append(oq)
             remove_answer_list.append(oa)
-
+    #for q, a in zip(remove_query_list, remove_answer_list):
+        #print(len(q), "VSVSVS", len(a))
+        #print(q, "VSVSVS", a)
     for rem_oq, rem_oa in zip(remove_query_list, remove_answer_list):
         query.remove(rem_oq)
         answer.remove(rem_oa)
+    #for q, a in zip(temp1, temp2):
+    #    print(q, "VSVSVS", a)
+
     return (query, answer)
 
 #자막 내 인물 이름, 특수지명 등을 다른걸로 대체한다.
@@ -150,13 +138,14 @@ def subtitle_converter(input_filename, output_filename, encoding='utf-8'):
             continue
         data.append(line)
 
-    result = attach_sameturn(data)
+    #result = attach_sameturn(data)
 
     # separating into two parts (OQ, OA)
     #(query, answer) = extract_conversations(result)
-    (query, answer) = extract_conversations_v2(result)
+    (query, answer) = extract_conversations_v2(data)
+
     #여기서 길이가 너무 길거나 짧으면 제외 (아, 그래요? 네? 와 같이 자막 상에서 나름의 문맥상 진행되는 연속대화를 데이터로 뽑아선 X)
-    (query, answer) = QA_cutter(query, answer)
+    (query, answer) = QA_cutter_v2(query, answer)
 
     # 붙으면 대명사(받침있으면 그 녀석 없으면 걔), 공백으로 둘러싸이면 호출로 생각
     targets=['천송이', '천송아', '송이']
@@ -444,7 +433,7 @@ def load_data(QAfile, Encoder_Dict_key2val_file_forBE, Decoder_Dict_key2val_file
 
     return (embedded_enc_input_forBE, embedded_dec_input_forBE, Encoder_Dict_key2val_forBE , Decoder_Dict_val2key_forBE, embedded_enc_input_forGG, embedded_dec_input_forGG,Encoder_Dict_key2val_forGG, Decoder_Dict_val2key_forGG)
 
-subtitle_converter("data_snl.txt", "data_snl2.csv", encoding='cp949')
+subtitle_converter("data_snl.txt", "data_snl_test.csv", encoding='cp949')
 #remove_empty_from_csv("data_potatostar_forman.csv")
 #load_handwork_n_create_dict("./final/data_final.csv", "./final/Encoder_Dict_key2val_file_forBE", "./final/Decoder_Dict_key2val_file_forBE", "./final/Decoder_Dict_val2key_file_forBE", "./final/Encoder_Dict_key2val_file_forGG", "./final/Decoder_Dict_key2val_file_forGG", "./final/Decoder_Dict_val2key_file_forGG", save=1)
 
