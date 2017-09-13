@@ -26,14 +26,33 @@ def clean_text(text):
     else: #normal
         return text
 
+def extract_conversations_v2(datas, num_nextA=2):
+    OQ=[]
+    OA=[]
+
+    for idx in range(len(datas)):
+        pattern="([?]+)"
+        p = re.compile(pattern)
+        m = p.search(datas[idx])
+        if m :
+            OQ.append(datas[idx])
+            if num_nextA+1 + idx < len(datas):
+                temp = " ".join([datas[i] for i in range(idx+1, idx + num_nextA+1)]) # 그 다음 대답이 질문자일 수 있음. 상대 대답이 2 문장 일 수있음.
+                OA.append(temp)
+            else :
+                temp = " ".join(
+                    [datas[i] for i in range(idx,len(datas))])  # 그 다음 대답이 질문자일 수 있음. 상대 대답이 2 문장 일 수있음.
+                OA.append(temp)
+    return (OQ, OA)
+
 #1. 질문 응답 셋을 만들어야한다. ? 나오면 질문, 그 다음 . or ! 나올때까지 받아놓고 응답으로 본다. (이후는 수작업가자.)
-def extract_conversations(data):
+def extract_conversations(datas):
     OQ=[]
     OA=[]
 
     last_query = ""
     answer = ""
-    for line in data:
+    for line in datas:
         #answer이 비었을때만 last_query 넣는다. ? 랑 !가 연속이면 저장해봄. 문제점1. !가 저장되버림 문제점2. 서로 물음표 쓰면서 대화하고 있을 때. 문제점3. 서로 마침표 쓰면서 대화할 때.
         #?를 포함하면 바로 선택, 바로 그 다음 응답만 선택
         pattern = "([?]+)"
@@ -45,7 +64,6 @@ def extract_conversations(data):
             else:
                 last_query += " " + line
         elif len(last_query) != 0 and len(answer) != 0 and m:
-            #conversations.append((last_query, answer))
             OQ.append(last_query)
             OA.append(answer)
             last_query = line
@@ -55,6 +73,9 @@ def extract_conversations(data):
                 answer = line
             elif len(last_query) != 0 and m is None and len(answer) != 0:
                 answer += " " + line
+    if len(last_query) != 0 and len(answer) != 0 :
+        OQ.append(last_query)
+        OA.append(answer)
     return (OQ, OA)
 
 #2. 같은 사람이 이어서 말한건데 자막이 줄을 바꿨으면?  모든 라인을 돌면서, 마침표('.')가 없이 마치면 잘린걸로 보고 다음 line을 그 앞 line에 붙인다.
@@ -119,7 +140,7 @@ def noun_fetcher(datas, targets, substitutions):
     return datas
 
 def subtitle_converter(input_filename, output_filename, encoding='utf-8'):
-    #getting data preprocessed
+    #getting data to be preprocessed
     data = []
     # f = open(input_filename, 'r', encoding="cp949")
     f = codecs.open(input_filename, "r", encoding)
@@ -132,7 +153,8 @@ def subtitle_converter(input_filename, output_filename, encoding='utf-8'):
     result = attach_sameturn(data)
 
     # separating into two parts (OQ, OA)
-    (query, answer) = extract_conversations(result)
+    #(query, answer) = extract_conversations(result)
+    (query, answer) = extract_conversations_v2(result)
     #여기서 길이가 너무 길거나 짧으면 제외 (아, 그래요? 네? 와 같이 자막 상에서 나름의 문맥상 진행되는 연속대화를 데이터로 뽑아선 X)
     (query, answer) = QA_cutter(query, answer)
 
@@ -422,12 +444,18 @@ def load_data(QAfile, Encoder_Dict_key2val_file_forBE, Decoder_Dict_key2val_file
 
     return (embedded_enc_input_forBE, embedded_dec_input_forBE, Encoder_Dict_key2val_forBE , Decoder_Dict_val2key_forBE, embedded_enc_input_forGG, embedded_dec_input_forGG,Encoder_Dict_key2val_forGG, Decoder_Dict_val2key_forGG)
 
-#subtitle_converter("data_staryou.txt", "data_staryou.csv")
-#remove_empty_from_csv("data_staryou.csv")
-#load_handwork_n_create_dict("data_staryou.csv", "Encoder_Dict_key2val_file_forBE", "Decoder_Dict_key2val_file_forBE", "Decoder_Dict_val2key_file_forBE", "Encoder_Dict_key2val_file_forGG", "Decoder_Dict_key2val_file_forGG", "Decoder_Dict_val2key_file_forGG", save=1)
+subtitle_converter("data_snl.txt", "data_snl2.csv", encoding='cp949')
+#remove_empty_from_csv("data_potatostar_forman.csv")
+#load_handwork_n_create_dict("./final/data_final.csv", "./final/Encoder_Dict_key2val_file_forBE", "./final/Decoder_Dict_key2val_file_forBE", "./final/Decoder_Dict_val2key_file_forBE", "./final/Encoder_Dict_key2val_file_forGG", "./final/Decoder_Dict_key2val_file_forGG", "./final/Decoder_Dict_val2key_file_forGG", save=1)
 
-f1,f2,f3,f4,f5,f6, f7, f8 = load_data("data_staryou.csv", "Encoder_Dict_key2val_file_forBE", "Decoder_Dict_key2val_file_forBE", "Decoder_Dict_val2key_file_forBE", "Encoder_Dict_key2val_file_forGG", "Decoder_Dict_key2val_file_forGG", "Decoder_Dict_val2key_file_forGG")
+#f1,f2,f3,f4,f5,f6, f7, f8 = load_data("./final/data_final.csv", "./final/Encoder_Dict_key2val_file_forBE", "./final/Decoder_Dict_key2val_file_forBE", "./final/Decoder_Dict_val2key_file_forBE", "./final/Encoder_Dict_key2val_file_forGG", "./final/Decoder_Dict_key2val_file_forGG", "./final/Decoder_Dict_val2key_file_forGG")
+#871개 대화 셋 디코더 딕셔너리 사이즈 1253, 242개 대화셋 디코더 딕셔너리 사이즈 542
 
+
+
+
+#print(len(f3))
+#print(len(f4))
 '''
 필요한 라이브러리
 Numpy, koNLPy
